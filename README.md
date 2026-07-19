@@ -1,5 +1,35 @@
 # Self-Balancing Robot — ESP32 + MPU6050 + TB6612FNG + GA25-370
 
+## Project structure (PlatformIO)
+
+```
+self_balancing_robot/
+├── platformio.ini      # build config (board, framework, monitor speed)
+├── src/
+│   └── main.cpp        # the full sketch
+└── README.md
+```
+
+### Building/uploading
+
+1. Install [PlatformIO](https://platformio.org/) (either the standalone core, or the VS Code extension).
+2. Open this folder as a PlatformIO project (VS Code: "Open Folder", it auto-detects `platformio.ini`).
+3. In `platformio.ini`, `board` is set to `esp32doit-devkit-v1`. If your board is different, change it — common alternatives:
+   - `esp32dev` (generic DevKitC-style board)
+   - `esp32-s3-devkitc-1` (ESP32-S3)
+   - `nodemcu-32s`
+   - `wemos_d1_mini32`
+   Run `pio boards esp32` to list all supported ESP32 boards if you're not sure which matches yours.
+
+   Note: the code uses the *channel-based* LEDC PWM API (`ledcSetup`/`ledcAttachPin`/`ledcWrite(channel, ...)`), which matches Arduino-ESP32 core 2.x (what PlatformIO's `espressif32` platform currently installs by default). If you ever upgrade to core 3.x, that version uses a different pin-based API (`ledcAttach`/`ledcWrite(pin, ...)`) and the PWM setup lines would need updating.
+4. Build and upload:
+   ```bash
+   pio run              # build
+   pio run -t upload    # build + flash
+   pio device monitor   # serial monitor (115200 baud, matches platformio.ini)
+   ```
+   Or in VS Code, use the PlatformIO toolbar icons (checkmark = build, arrow = upload, plug = monitor).
+
 ## Parts list
 
 - ESP32 dev board (any variant with enough GPIO)

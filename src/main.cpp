@@ -93,6 +93,8 @@ const float COUNTS_PER_WHEEL_REV = PPR_PER_MOTOR_REV * GEAR_RATIO * 4.0; // x4 q
 // PWM (LEDC) config
 const int PWM_FREQ = 20000;   // 20 kHz, above audible range
 const int PWM_RES  = 8;       // 8-bit -> 0-255
+const int LEDC_CHANNEL_A = 0; // left motor PWM channel
+const int LEDC_CHANNEL_B = 1; // right motor PWM channel
 
 // ---------------------- STATE VARIABLES ----------------------
 
@@ -115,6 +117,18 @@ float lastVelError = 0.0;
 float targetAngleTrim = 0.0; // output of velocity loop, added to setpoint
 
 bool robotFallen = false;
+
+// ---------------------- FORWARD DECLARATIONS ----------------------
+// PlatformIO compiles this as a plain .cpp file, so (unlike the Arduino
+// IDE's .ino auto-prototyping) function prototypes must be declared
+// before they're used below.
+void mpu6050Write(uint8_t reg, uint8_t val);
+void mpu6050Init();
+void mpu6050Read(float &accelPitch, float &gyroY);
+void setMotor(uint8_t channel, int in1Pin, int in2Pin, int speed);
+void stopMotors();
+void innerLoop(float dt);
+void outerLoop(float dt);
 
 // ---------------------- ENCODER ISRs ----------------------
 // Simple x2 quadrature decode (count on A edges, direction from B).
@@ -157,7 +171,7 @@ void mpu6050Read(float &accelPitch, float &gyroY) {
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(0x3B);
   Wire.endTransmission(false);
-  Wire.requestFrom(MPU6050_ADDR, 14, true);
+  Wire.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)14, (bool)true);
 
   int16_t ax = (Wire.read() << 8) | Wire.read();
   int16_t ay = (Wire.read() << 8) | Wire.read();
@@ -179,7 +193,7 @@ void mpu6050Read(float &accelPitch, float &gyroY) {
 // ---------------------- MOTOR DRIVER ----------------------
 
 // speed: -255..255 (negative = reverse)
-void setMotor(int pwmPin, int in1Pin, int in2Pin, int speed) {
+void setMotor(uint8_t channel, int in1Pin, int in2Pin, int speed) {
   speed = constrain(speed, -255, 255);
   if (speed >= 0) {
     digitalWrite(in1Pin, HIGH);
@@ -189,12 +203,12 @@ void setMotor(int pwmPin, int in1Pin, int in2Pin, int speed) {
     digitalWrite(in2Pin, HIGH);
     speed = -speed;
   }
-  ledcWrite(pwmPin, speed);
+  ledcWrite(channel, speed);
 }
 
 void stopMotors() {
-  ledcWrite(PWMA, 0);
-  ledcWrite(PWMB, 0);
+  ledcWrite(LEDC_CHANNEL_A, 0);
+  ledcWrite(LEDC_CHANNEL_B, 0);
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN1, LOW);
@@ -217,8 +231,10 @@ void setup() {
   pinMode(STBY, OUTPUT);
   digitalWrite(STBY, HIGH); // enable driver
 
-  ledcAttach(PWMA, PWM_FREQ, PWM_RES);
-  ledcAttach(PWMB, PWM_FREQ, PWM_RES);
+  ledcSetup(LEDC_CHANNEL_A, PWM_FREQ, PWM_RES);
+  ledcAttachPin(PWMA, LEDC_CHANNEL_A);
+  ledcSetup(LEDC_CHANNEL_B, PWM_FREQ, PWM_RES);
+  ledcAttachPin(PWMB, LEDC_CHANNEL_B);
 
   pinMode(ENCA_A, INPUT);
   pinMode(ENCA_B, INPUT);
@@ -298,8 +314,8 @@ void innerLoop(float dt) {
   output = constrain(output, -255, 255);
 
   int pwmOut = (int)output;
-  setMotor(PWMA, AIN1, AIN2, pwmOut);
-  setMotor(PWMB, BIN1, BIN2, pwmOut);
+  setMotor(LEDC_CHANNEL_A, AIN1, AIN2, pwmOut);
+  setMotor(LEDC_CHANNEL_B, BIN1, BIN2, pwmOut);
 
   // Uncomment for tuning with Serial Plotter:
   // Serial.print(pitchAngle); Serial.print(",");
